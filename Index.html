@@ -3,112 +3,540 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Paperboy Anime Roguelike</title>
+  <title>Turbo Paperboy 16</title>
   <style>
-    * {
-      box-sizing: border-box;
-      touch-action: manipulation;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    body, html {
-      margin: 0;
-      padding: 0;
+    * { box-sizing: border-box; touch-action: none; margin: 0; padding: 0; user-select: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Courier New', monospace; background: #240046; }
+    
+    #gameCanvas {
+      position: absolute;
+      top: 0; left: 0;
       width: 100%;
       height: 100%;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #87CEEB;
-    }
-    #gameCanvas {
-      width: 100vw;
-      height: 100vh;
+      z-index: 1;
       display: block;
+      background: #240046;
     }
+
     .ui-layer {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
       pointer-events: none;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       padding: 16px;
+      z-index: 10;
     }
+
     .hud {
       display: flex;
       justify-content: space-between;
       width: 100%;
     }
+
     .card {
-      background: rgba(255, 255, 255, 0.92);
-      padding: 10px 16px;
-      border-radius: 16px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      font-weight: 800;
-      color: #2c3e50;
-      font-size: 15px;
-      border: 2px solid #fff;
-      backdrop-filter: blur(4px);
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #00ffff;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-weight: bold;
+      color: #00ffff;
+      font-size: 14px;
+      text-shadow: 2px 2px #000;
+      box-shadow: 0 0 10px rgba(0,255,255,0.4);
     }
+
     .controls {
       pointer-events: auto;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
       width: 100%;
-      gap: 10px;
-      margin-bottom: 10px;
     }
-    .btn-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .action-group {
-      display: flex;
-      flex-direction: row;
-      gap: 10px;
-    }
+
     button {
       pointer-events: auto;
-      padding: 12px 18px;
-      border-radius: 25px;
+      padding: 14px 20px;
+      border-radius: 8px;
       border: 2px solid #fff;
-      background: #2ec4b6;
+      background: #7928ca;
       color: white;
       font-weight: bold;
-      font-size: 13px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      box-shadow: 0 4px 0 #3a125c;
       cursor: pointer;
-      transition: transform 0.1s;
     }
-    button:active { transform: scale(0.92); }
-    .btn-pedal { background: #ff9f1c; font-size: 15px; padding: 16px 20px; border-radius: 40px; }
-    .btn-throw { background: #e71d36; font-size: 15px; padding: 16px 20px; border-radius: 40px; }
-    .btn-logs { background: #ffbf69; color: #2c3e50; }
+    button:active { transform: translateY(4px); box-shadow: 0 0 0 #3a125c; }
+    .btn-pedal { background: #ff0055; box-shadow: 0 4px 0 #88002d; font-size: 16px; padding: 18px 28px; }
 
-    /* Modals */
     .modal {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.65);
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.95);
       display: none;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       pointer-events: auto;
       z-index: 100;
-    }
-    .modal-content {
-      background: #fff;
-      padding: 24px;
-      border-radius: 20px;
-      max-width: 90%;
-      width: 380px;
+      color: #00ffff;
+      font-family: 'Courier New', monospace;
       text-align: center;
-      box-shadow: 0 10px 25px rgba(0,0,0,0
+      padding: 20px;
+    }
+    .modal h1 { color: #ff0055; font-size: 28px; margin-bottom: 15px; text-shadow: 3px 3px #000; }
+    .modal p { font-size: 16px; margin: 8px 0; color: #fff; }
+    .modal button { margin-top: 20px; background: #00ffff; color: #000; border: 2px solid #fff; font-size: 16px; }
+  </style>
+</head>
+<body>
+
+  <audio id="bgm" loop preload="auto">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2ec2eSa0mJmS13Z56q6m1Z1XGvE76uWvF9/S17P7/2zS0pVV6bY37DZuVvZyqZ9Z26b1c+s6+uM4JzQ0+jWu/X8q9fN7vvv97Ww4+m/u/9+ZlBXVr+v5N6qocnU2N221qef+eX89//v47a97/7///+6m6qqkXzO/97ZtqK0z9bb++P78vzq//+3pe7n/+7c5J5RUVFRUVFRUVFRUVFRUWdnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dn" type="audio/wav">
+  </audio>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="ui-layer">
+    <div class="hud">
+      <div class="card">❤️ <span id="hp">3</span> | ⭐ <span id="score">00000</span><br>⏱️ <span id="timer">60</span>s</div>
+      <div class="card">🚴 <span id="rpm">50</span> RPM<br><span id="powerupStatus" style="color:#ff00ff"></span></div>
+    </div>
+
+    <div class="controls">
+      <button onclick="connectBLE()">🚲 SENSOR</button>
+      <button class="btn-pedal" onclick="manualPedal()">PEDAL</button>
+    </div>
+  </div>
+
+  <div id="recapModal" class="modal">
+    <h1>ROUTE COMPLETE!</h1>
+    <p>Final Score: <span id="finalScore">0</span></p>
+    <p>Deliveries Hit: <span id="finalHits">0</span> / <span id="finalTotal">0</span></p>
+    <p>Accuracy: <span id="finalAccuracy">0%</span></p>
+    <button onclick="restartGame()">RIDE AGAIN</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const bgm = document.getElementById('bgm');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let score = 0, rpm = 50, distance = 0;
+    let gameTime = 60;
+    let gameOver = false;
+    let totalHousesSpawned = 0;
+    let successfulHits = 0;
+
+    let homingCharges = 0;
+    let doublePointsTimer = 0;
+
+    let isAiming = false;
+    let startTouch = { x: 0, y: 0 };
+    let currentTouch = { x: 0, y: 0 };
+
+    // Air Zonk-inspired TurboGrafx-16 Chiptune Engine
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let musicInterval = null;
+
+    function startMusic() {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      bgm.volume = 0.4;
+      bgm.play().catch(e => console.log("Audio play deferred:", e));
+
+      if (musicInterval) return;
+
+      const melody = [
+        330, 330, 392, 330, 261.63, 293.66, 330, 392,
+        440, 392, 330, 293.66, 261.63, 220, 261.63, 293.66,
+        330, 392, 440, 523.25, 440, 392, 330, 293.66,
+        261.63, 293.66, 330, 293.66, 220, 220, 246.94, 261.63
+      ];
+      
+      const bassline = [110, 110, 82.41, 82.41, 98, 98, 130.81, 130.81];
+
+      let step = 0;
+      musicInterval = setInterval(() => {
+        if (gameOver) return;
+        
+        const lead = audioCtx.createOscillator();
+        const leadGain = audioCtx.createGain();
+        lead.type = 'square';
+        lead.frequency.value = melody[step % melody.length];
+        leadGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+        leadGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+        lead.connect(leadGain);
+        leadGain.connect(audioCtx.destination);
+        lead.start();
+        lead.stop(audioCtx.currentTime + 0.12);
+
+        if (step % 2 === 0) {
+          const bass = audioCtx.createOscillator();
+          const bassGain = audioCtx.createGain();
+          bass.type = 'sawtooth';
+          bass.frequency.value = bassline[(step / 2) % bassline.length];
+          bassGain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+          bassGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+          bass.connect(bassGain);
+          bassGain.connect(audioCtx.destination);
+          bass.start();
+          bass.stop(audioCtx.currentTime + 0.2);
+        }
+
+        step++;
+      }, 125);
+    }
+
+    window.addEventListener('pointerdown', () => startMusic(), { once: true });
+
+    function playSFX(freq, type = 'square', duration = 0.08) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    let houses = [];
+    let papers = [];
+    let powerups = [];
+
+    window.manualPedal = function() {
+      startMusic();
+      rpm = Math.min(120, rpm + 20);
+      playSFX(440, 'square', 0.05);
+    };
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (gameOver) return;
+      startMusic();
+      isAiming = true;
+      startTouch = { x: e.clientX, y: e.clientY };
+      currentTouch = { x: e.clientX, y: e.clientY };
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isAiming) return;
+      currentTouch = { x: e.clientX, y: e.clientY };
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      if (!isAiming || gameOver) return;
+      isAiming = false;
+      let dx = currentTouch.x - startTouch.x;
+      let dy = currentTouch.y - startTouch.y;
+      throwPaper(dx, dy);
+    });
+
+    function throwPaper(dx, dy) {
+      playSFX(880, 'square', 0.12);
+      let isHoming = homingCharges > 0;
+      if (isHoming) homingCharges--;
+
+      papers.push({
+        x: canvas.width / 2,
+        y: canvas.height - 100,
+        vx: dx * 0.15,
+        vy: dy * 0.15 - 6,
+        homing: isHoming,
+        life: 50
+      });
+    }
+
+    window.connectBLE = async function() {
+      startMusic();
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['cycling_speed_and_cadence']
+        });
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('cycling_speed_and_cadence');
+        const char = await service.getCharacteristic('csc_measurement');
+        await char.startNotifications();
+        
+        let lastCrankRevs = null, lastCrankTime = null;
+        char.addEventListener('characteristicvaluechanged', (e) => {
+          const val = e.target.value;
+          const flags = val.getUint8(0);
+          if (flags & 0x02) {
+            const crankRevs = val.getUint16(1, true);
+            const crankTime = val.getUint16(3, true);
+            if (lastCrankTime !== null) {
+              let revDiff = crankRevs - lastCrankRevs;
+              let timeDiff = (crankTime - lastCrankTime) / 1024;
+              if (revDiff < 0) revDiff += 65536;
+              if (timeDiff < 0) timeDiff += 64;
+              if (timeDiff > 0) rpm = Math.round((revDiff / timeDiff) * 60);
+            }
+            lastCrankRevs = crankRevs;
+            lastCrankTime = crankTime;
+          }
+        });
+        alert("Connected!");
+      } catch (err) {
+        alert("BLE Error: " + err.message);
+      }
+    };
+
+    // Game Timer
+    setInterval(() => {
+      if (gameOver) return;
+      gameTime--;
+      document.getElementById('timer').innerText = gameTime;
+      if (doublePointsTimer > 0) doublePointsTimer--;
+      if (gameTime <= 0) endGame();
+    }, 1000);
+
+    // House Spawning (z = 1500 for early horizon visibility)
+    setInterval(() => {
+      if (gameOver) return;
+      const side = Math.random() > 0.5 ? 'right' : 'left';
+      houses.push({
+        z: 1500,
+        side: side,
+        delivered: false,
+        color: side === 'right' ? '#ff6b6b' : '#4ea8de'
+      });
+      totalHousesSpawned++;
+
+      if (Math.random() > 0.5) {
+        powerups.push({
+          z: 1500,
+          type: Math.random() > 0.5 ? 'homing' : 'double',
+          xOffset: (Math.random() - 0.5) * 120
+        });
+      }
+    }, 3500);
+
+    setInterval(() => {
+      if (gameOver) return;
+      rpm = Math.max(35, rpm - 1);
+      document.getElementById('rpm').innerText = rpm;
+    }, 600);
+
+    function endGame() {
+      gameOver = true;
+      bgm.pause();
+      if (musicInterval) { clearInterval(musicInterval); musicInterval = null; }
+      document.getElementById('finalScore').innerText = score;
+      document.getElementById('finalHits').innerText = successfulHits;
+      document.getElementById('finalTotal').innerText = totalHousesSpawned;
+      let acc = totalHousesSpawned > 0 ? Math.round((successfulHits / totalHousesSpawned) * 100) : 0;
+      document.getElementById('finalAccuracy').innerText = acc + '%';
+      document.getElementById('recapModal').style.display = 'flex';
+    }
+
+    window.restartGame = function() {
+      score = 0;
+      gameTime = 60;
+      gameOver = false;
+      houses = [];
+      papers = [];
+      powerups = [];
+      totalHousesSpawned = 0;
+      successfulHits = 0;
+      homingCharges = 0;
+      rpm = 50;
+      document.getElementById('recapModal').style.display = 'none';
+      startMusic();
+    };
+
+    function render() {
+      const speed = rpm * 0.05;
+      distance += speed;
+
+      let puText = '';
+      if (homingCharges > 0) puText += `⭐Homing(${homingCharges}) `;
+      if (doublePointsTimer > 0) puText += `⚡2x(${doublePointsTimer}s)`;
+      document.getElementById('powerupStatus').innerText = puText;
+
+      // Sky
+      ctx.fillStyle = '#240046';
+      ctx.fillRect(0, 0, canvas.width, canvas.height * 0.45);
+
+      // Horizon Line
+      ctx.fillStyle = '#ff007f';
+      ctx.fillRect(0, canvas.height * 0.43, canvas.width, 6);
+
+      // Grass
+      ctx.fillStyle = '#38b000';
+      ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55);
+
+      // Road
+      const roadTopY = canvas.height * 0.45;
+      ctx.fillStyle = '#495057';
+      ctx.beginPath();
+      ctx.moveTo(canvas.width * 0.35, roadTopY);
+      ctx.lineTo(canvas.width * 0.65, roadTopY);
+      ctx.lineTo(canvas.width * 0.95, canvas.height);
+      ctx.lineTo(canvas.width * 0.05, canvas.height);
+      ctx.fill();
+
+      // Road Stripe
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.setLineDash([30, 30]);
+      ctx.lineDashOffset = -distance % 60;
+      ctx.moveTo(canvas.width * 0.5, roadTopY);
+      ctx.lineTo(canvas.width * 0.5, canvas.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Power-ups
+      for (let i = powerups.length - 1; i >= 0; i--) {
+        let p = powerups[i];
+        p.z -= speed * 8 + 1;
+        if (p.z <= 0) {
+          powerups.splice(i, 1);
+          continue;
+        }
+
+        let scale = 1 - (p.z / 1500);
+        let py = roadTopY + (canvas.height - roadTopY) * scale;
+        let px = (canvas.width / 2) + (p.xOffset * scale);
+
+        ctx.fillStyle = p.type === 'homing' ? '#ffea00' : '#d81159';
+        ctx.fillRect(px - (14 * scale), py - (14 * scale), 28 * scale, 28 * scale);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px - (14 * scale), py - (14 * scale), 28 * scale, 28 * scale);
+
+        if (p.z < 60 && Math.abs(p.xOffset) < 50) {
+          if (p.type === 'homing') homingCharges += 2;
+          if (p.type === 'double') doublePointsTimer = 5;
+          playSFX(660, 'square', 0.15);
+          powerups.splice(i, 1);
+        }
+      }
+
+      // Houses
+      for (let i = houses.length - 1; i >= 0; i--) {
+        let h = houses[i];
+        h.z -= speed * 8 + 1;
+
+        if (h.z <= 0) {
+          houses.splice(i, 1);
+          continue;
+        }
+
+        let scale = 1 - (h.z / 1500);
+        if (scale < 0.02) continue;
+
+        let houseY = roadTopY + (canvas.height - roadTopY) * scale;
+        let roadWidthAtY = (canvas.width * 0.6) * scale;
+        let houseX = h.side === 'right' 
+          ? (canvas.width / 2) + (roadWidthAtY / 2) + (20 * scale)
+          : (canvas.width / 2) - (roadWidthAtY / 2) - (180 * scale);
+
+        let width = 160 * scale;
+        let height = 120 * scale;
+
+        ctx.fillStyle = h.delivered ? '#00f5d4' : h.color;
+        ctx.fillRect(houseX, houseY - height, width, height);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(houseX, houseY - height, width, height);
+
+        ctx.fillStyle = '#ff007f';
+        ctx.beginPath();
+        ctx.moveTo(houseX - 10 * scale, houseY - height);
+        ctx.lineTo(houseX + width / 2, houseY - height - (50 * scale));
+        ctx.lineTo(houseX + width + 10 * scale, houseY - height);
+        ctx.fill();
+
+        ctx.fillStyle = h.delivered ? '#70e000' : '#ffb703';
+        let mbX = h.side === 'right' ? houseX - (30 * scale) : houseX + width + (10 * scale);
+        ctx.fillRect(mbX, houseY - (40 * scale), 28 * scale, 34 * scale);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(mbX, houseY - (40 * scale), 28 * scale, 34 * scale);
+      }
+
+      // Papers
+      for (let i = papers.length - 1; i >= 0; i--) {
+        let p = papers[i];
+
+        if (p.homing && houses.length > 0) {
+          let nearest = houses.find(h => !h.delivered);
+          if (nearest) {
+            let targetScreenX = nearest.side === 'right' ? canvas.width * 0.75 : canvas.width * 0.25;
+            p.x += (targetScreenX - p.x) * 0.2;
+            p.y += (canvas.height * 0.6 - p.y) * 0.2;
+          }
+        } else {
+          p.x += p.vx;
+          p.y += p.vy;
+        }
+        p.life--;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(p.x, p.y, 20, 14);
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(p.x, p.y, 20, 14);
+
+        for (let h of houses) {
+          if (!h.delivered && h.z < 400 && h.z > 40) {
+            let roadWidthAtY = (canvas.width * 0.6) * (1 - (h.z / 1500));
+            let houseX = h.side === 'right' 
+              ? (canvas.width / 2) + (roadWidthAtY / 2) 
+              : (canvas.width / 2) - (roadWidthAtY / 2);
+
+            if (Math.abs(p.x - houseX) < 150) {
+              h.delivered = true;
+              successfulHits++;
+              let pts = 250 * (doublePointsTimer > 0 ? 2 : 1);
+              score += pts;
+              document.getElementById('score').innerText = String(score).padStart(5, '0');
+              playSFX(1046.50, 'square', 0.2);
+              papers.splice(i, 1);
+              break;
+            }
+          }
+        }
+
+        if (p.life <= 0) papers.splice(i, 1);
+      }
+
+      // Aiming Reticle
+      if (isAiming) {
+        ctx.strokeStyle = '#ff007f';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2, canvas.height - 100);
+        ctx.lineTo(currentTouch.x, currentTouch.y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#00f5d4';
+        ctx.beginPath();
+        ctx.arc(currentTouch.x, currentTouch.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
+      requestAnimationFrame(render);
+    }
+    render();
+  </script>
+</body>
+</html>
