@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Paper Boy Quest: Sunshine Tokyo 陽だまり</title>
+    <!-- Tailwind CSS for UI Overlay -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Yuji+Syuku&display=swap');
+
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background-color: #87ceeb;
+            color: #2d3748;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .font-kanji {
+            font-family: 'Yuji Syuku', serif;
+        }
+
+        /* Feel-good subtle warm sunlight vignette */
+        .sunlight-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 70% 20%, rgba(255, 253, 230, 0.25) 0%, rgba(0,0,0,0.05) 100%);
+            pointer-events: none;
+            z-index: 15;
+        }
+
+        /* Canvas Style */
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            image-rendering: pixelated;
+        }
+
+        /* Custom Scrollbar for BLE Console Log */
+        #bleConsoleLog::-webkit-scrollbar {
+            width: 4px;
+        }
+        #bleConsoleLog::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden bg-sky-200">
+
+    <!-- Warm Sunlight Overlay Layer -->
+    <div class="sunlight-overlay"></div>
+
+    <!-- Canvas Engine -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Top HUD Overlay -->
+    <div id="hud" class="absolute top-0 left-0 w-full p-3 sm:p-4 z-30 flex justify-between items-start pointer-events-none">
+        <!-- Stats & Health -->
+        <div class="flex flex-col gap-1 bg-white/80 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl shadow-lg border border-amber-200/60">
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-amber-700 tracking-wider">HP</span>
+                <div id="hpHearts" class="flex gap-1 text-red-500 text-lg sm:text-xl">❤️❤️❤️</div>
+            </div>
+            <div class="text-xs sm:text-sm font-extrabold text-amber-800 tracking-wide">
+                SCORE: <span id="scoreText" class="text-emerald-600">00000</span>
+            </div>
+            <div class="text-xs font-bold text-sky-700">
+                PAPERS: <span id="paperText" class="text-sky-900">30</span>/<span id="maxPaperText">30</span>
+            </div>
+        </div>
+
+        <!-- Cadence & Speed Gauge -->
+        <div class="flex flex-col items-end gap-1 bg-white/80 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl shadow-lg border border-emerald-200/60">
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-emerald-700">CADENCE</span>
+                <span id="rpmText" class="text-xl sm:text-2xl font-black text-emerald-600">0</span>
+                <span class="text-[10px] text-gray-500 font-bold">RPM</span>
+            </div>
+            <div class="w-28 sm:w-36 h-3 bg-gray-200 rounded-full overflow-hidden p-0.5 border border-gray-300">
+                <div id="rpmBar" class="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full w-0 transition-all duration-200"></div>
+            </div>
+            <div id="bleStatus" class="text-[9px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">BLE: Standby</div>
+        </div>
+    </div>
+
+    <!-- On-Screen Controls & Debug Panel Toggle -->
+    <div class="absolute bottom-4 left-0 w-full px-4 z-30 flex justify-between items-end pointer-events-auto">
+        <!-- BLE & Sensors Actions -->
+        <div class="flex flex-col gap-2">
+            <button id="btnConnectBLE" class="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md border-2 border-white/80 active:scale-95 transition-transform flex items-center gap-1.5">
+                🚲 CONNECT SENSOR
+            </button>
+            <button id="btnGyro" class="px-3 py-2 bg-sky-500 hover:bg-sky-600 active:bg-sky-700 text-white text-xs font-bold rounded-xl shadow-md border-2 border-white/80 active:scale-95 transition-transform flex items-center gap-1.5">
+                📱 ENABLE GYRO
+            </button>
+            <button id="btnToggleLog" class="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold rounded-lg border border-amber-300">
+                📋 BLE LOGS
+            </button>
+        </div>
+
+        <!-- Virtual Pedal & Throw Buttons for Testing -->
+        <div class="flex items-center gap-3">
+            <button id="btnVirtualPedal" class="w-16 h-16 sm:w-20 sm:h-20 bg-amber-500 active:bg-amber-600 text-white rounded-full font-bold text-xs flex flex-col items-center justify-center border-4 border-amber-200 shadow-lg active:scale-90 transition-transform">
+                <span>PEDAL</span>
+                <span class="text-[9px] opacity-80">(SPACE)</span>
+            </button>
+            <button id="btnThrow" class="w-20 h-20 sm:w-24 sm:h-24 bg-emerald-500 active:bg-emerald-600 text-white font-black rounded-full text-xs sm:text-sm flex flex-col items-center justify-center border-4 border-white shadow-xl active:scale-90 transition-transform">
+                <span>THROW</span>
+                <span class="text-[9px] opacity-80">(SWIPE)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Bluetooth Debug Logger Modal (Collapsible) -->
+    <div id="bleLogModal" class="hidden absolute top-16 left-4 right-4 max-w-md mx-auto bg-white/95 backdrop-blur-md z-50 rounded-2xl shadow-2xl border border-gray-200 p-4 text-xs">
+        <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-200">
+            <span class="font-bold text-gray-700">🔍 BLE Connection Debugger</span>
+            <button id="btnCloseLog" class="text-gray-400 hover:text-gray-600 font-bold px-2">✕</button>
+        </div>
+        <div id="bleConsoleLog" class="h-36 overflow-y-auto font-mono text-[11px] bg-slate-900 text-emerald-400 p-2.5 rounded-xl space-y-1">
+            <div class="text-gray-400">> Logger initialized. Ready to scan...</div>
+        </div>
+    </div>
+
+    <!-- Start / Title Overlay -->
+    <div id="titleScreen" class="absolute inset-0 bg-amber-50/95 z-40 flex flex-col items-center justify-center p-6 text-center backdrop-blur-sm">
+        <div class="text-3xl sm:text-4xl font-kanji text-emerald-700 mb-1">陽だまりの配達手</div>
+        <h1 class="text-3xl sm:text-5xl font-black tracking-tight text-amber-800 mb-1">
+            PAPER BOY QUEST
+        </h1>
+        <h2 class="text-base sm:text-xl text-emerald-600 font-bold tracking-wide mb-6">
+            🌸 SUNSHINE TOKYO 🌸
+        </h2>
+
+        <div class="max-w-md bg-white border border-amber-200/80 p-5 rounded-2xl text-left text-xs sm:text-sm text-gray-600 space-y-2.5 shadow-xl mb-6">
+            <p class="text-amber-800 font-extrabold text-sm">🏡 HOW TO PLAY:</p>
+            <p>• <span class="text-emerald-600 font-bold">PEDAL:</span> Tap Virtual Pedal / Spacebar OR Connect your Bluetooth Cadence Sensor.</p>
+            <p>• <span class="text-sky-600 font-bold">AIM:</span> Tilt your device horizontally (Gyro) or Drag across the screen.</p>
+            <p>• <span class="text-amber-600 font-bold">DELIVER:</span> Tap THROW or Flick Up towards traditional Red Mailboxes & Doorways.</p>
+            <p>• <span class="text-red-500 font-bold">CAUTION:</span> Mind the friendly Shiba Inus resting on the sidewalk walls!</p>
+        </div>
+
+        <button id="btnStartGame" class="px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-base sm:text-lg rounded-2xl shadow-lg shadow-emerald-500/30 hover:scale-105 active:scale-95 transition-all border-2 border-white">
+            START SUNNY ROUTE 🚲
+        </button>
+    </div>
+
+    <!-- Roguelike Sector Clear / Perk Selection Modal -->
+    <div id="perkModal" class="hidden absolute inset-0 bg-slate-900/80 z-50 flex flex-col items-center justify-center p-4 text-center backdrop-blur-md">
+        <div class="text-xs font-bold text-emerald-300 tracking-widest mb-1">NEIGHBORHOOD CLEARED!</div>
+        <h2 class="text-2xl sm:text-3xl font-black text-amber-300 mb-6">CHOOSE A FEEL-GOOD PERK</h2>
+
+        <div id="perkContainer" class="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl w-full px-4">
+            <!-- Perk Cards injected dynamically -->
+        </div>
+    </div>
+
+    <!-- JavaScript Game Engine & Bluetooth System -->
+    <script>
+        /* --- BLE DEBUG LOGGER HELPER --- */
+        function logBLE(msg, type = 'info') {
+            console.log(`[BLE] ${msg}`);
+            const consoleEl = document.getElementById('bleConsoleLog');
+            if (consoleEl) {
+                const item = document.createElement('div');
+                if (type === 'error') item.className = 'text-red-400 font-bold';
+                else if (type === 'success') item.className = 'text-emerald-300 font-bold';
+                else if (type === 'warn') item.className = 'text-yellow-300';
+                else item.className = 'text-gray-300';
+                item.innerText = `> ${msg}`;
+                consoleEl.appendChild(item);
+                consoleEl.scrollTop = consoleEl.scrollHeight;
+            }
+        }
+
+        document.getElementById('btnToggleLog').addEventListener('click', () => {
+            document.getElementById('bleLogModal').classList.toggle('hidden');
+        });
+        document.getElementById('btnCloseLog').addEventListener('click', () => {
+            document.getElementById('bleLogModal').classList.add('hidden');
+        });
+
+        /* --- SOUND ENGINE (Web Audio API) --- */
+        class SoundEngine {
+            constructor() { this.ctx = null; }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playThrow() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(260, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.12);
+            }
+            playHit(isPerfect) {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                const freq = isPerfect ? 659.25 : 523.25; // E5 or C5
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(freq * 1.33, this.ctx.currentTime + 0.18);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+            playBark() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(160, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(80, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+        }
+
+        const sound = new SoundEngine();
+
+        /* --- GAME ENGINE STATE --- */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        function resizeCanvas() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        let gameState = 'TITLE'; // TITLE, PLAYING, PERK_SELECT
+        let score = 0;
+        let hp = 3;
+        let papers = 30;
+        let maxPapers = 30;
+        let distanceTraveled = 0;
+        const SECTOR_LENGTH = 12000;
+
+        // Cadence & Speed
+        let currentRPM = 0;
+        let targetRPM = 0;
+        let virtualPedalTimer = 0;
+        let speed = 0;
+
+        // Aiming
+        let aimX = 0.5;
+        let aimY = 0.6;
+        let gyroActive = false;
+
+        // Perks
+        const perks = {
+            magneticHitbox: 1.0,
+            goldenPapers: false,
+            cadenceBoost: 1.0,
+        };
+
+        // Entities
+        const thrownPapers = [];
+        const streetElements = [];
+        const floatingTexts = [];
+        const sakuraPetals = [];
+
+        // Initialize Sakura Petals
+        for (let i = 0; i < 30; i++) {
+            sakuraPetals.push({
+                x: Math.random() * window.innerWidth,
+                y: Math.random() * window.innerHeight,
+                size: 4 + Math.random() * 5,
+                speedY: 0.5 + Math.random() * 1.2,
+                speedX: 0.2 + Math.random() * 0.8,
+                rotation: Math.random() * Math.PI * 2
+            });
+        }
+
+        /* --- UNIVERSAL WEB BLUETOOTH INTEGRATION --- */
+        let bleDevice = null;
+        let lastCrankRevolutions = null;
+        let lastCrankEventTime = null;
+
+        document.getElementById('btnConnectBLE').addEventListener('click', async () => {
+            sound.init();
+            const statusEl = document.getElementById('bleStatus');
+            logBLE("Initiating Bluetooth Scan...", "info");
+
+            if (!navigator.bluetooth) {
+                logBLE("Web Bluetooth API not supported on this browser! Try Bluefy app on iOS or Chrome on Android/PC.", "error");
+                statusEl.innerText = "BLE: Unsupported Browser";
+                statusEl.className = "text-[9px] font-bold text-red-500 uppercase tracking-wider mt-0.5";
+                return;
+            }
+
+            try {
+                statusEl.innerText = "BLE: Scanning...";
+                statusEl.className = "text-[9px] font-bold text-amber-600 uppercase tracking-wider mt-0.5";
+
+                // UNIVERSAL SCANNER: acceptAllDevices = true allows any dual cadence/speed sensor to pop up!
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        'cycling_speed_and_cadence',
+                        0x1816, // CSC Standard
+                        0x1826, // Fitness Machine
+                        0x180d, // Heart Rate
+                        'fitness_machine'
+                    ]
+                });
+
+                logBLE(`Selected device: ${bleDevice.name || 'Unnamed Sensor'}`, "success");
+
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                logBLE("Connecting to GATT Server...", "info");
+                const server = await bleDevice.gatt.connect();
+                logBLE("Connected to GATT Server!", "success");
+
+                // Search for Cycling Speed and Cadence Service
+                let service = null;
+                try {
+                    service = await server.getPrimaryService('cycling_speed_and_cadence');
+                } catch (e1) {
+                    try {
+                        service = await server.getPrimaryService(0x1816);
+                    } catch (e2) {
+                        logBLE("Could not find standard CSC service (0x1816). Searching all services...", "warn");
+                    }
+                }
+
+                if (service) {
+                    const characteristic = await service.getCharacteristic('csc_measurement');
+                    await characteristic.startNotifications();
+                    characteristic.addEventListener('characteristicvaluechanged', (e) => {
+                        parseCSCData(e.target.value);
+                    });
+                    logBLE("Subscribed to CSC measurement notifications!", "success");
+                } else {
+                    logBLE("Connected, but device does not broadcast standard CSC 0x1816 cadence data.", "warn");
+                }
+
+                statusEl.innerText = "BLE: Connected (" + (bleDevice.name || 'Sensor') + ")";
+                statusEl.className = "text-[9px] font-bold text-emerald-600 uppercase tracking-wider mt-0.5";
+
+            } catch (err) {
+                logBLE(`BLE Error: ${err.message || err}`, "error");
+                statusEl.innerText = "BLE: Connection Canceled / Failed";
+                statusEl.className = "text-[9px] font-bold text-red-500 uppercase tracking-wider mt-0.5";
+            }
+        });
+
+        function onDisconnected() {
+            logBLE("BLE Device Disconnected!", "warn");
+            const statusEl = document.getElementById('bleStatus');
+            statusEl.innerText = "BLE: Disconnected";
+            statusEl.className = "text-[9px] font-bold text-gray-500 uppercase tracking-wider mt-0.5";
+        }
+
+        function parseCSCData(dataView) {
+            const flags = dataView.getUint8(0);
+            const hasWheelData = flags & 0x01;
+            const hasCrankData = flags & 0x02;
+
+            let offset = 1;
+            if (hasWheelData) offset += 6;
+
+            if (hasCrankData) {
+                const crankRevolutions = dataView.getUint16(offset, true);
+                const crankEventTime = dataView.getUint16(offset + 2, true);
+
+                if (lastCrankRevolutions !== null) {
+                    let revsDiff = crankRevolutions - lastCrankRevolutions;
+                    if (revsDiff < 0) revsDiff += 65536;
+
+                    let timeDiff = crankEventTime - lastCrankEventTime;
+                    if (timeDiff < 0) timeDiff += 65536;
+
+                    if (timeDiff > 0) {
+                        const rpm = Math.round((revsDiff / (timeDiff / 1024)) * 60);
+                        targetRPM = Math.min(160, Math.max(0, rpm));
+                        logBLE(`Cadence Update: ${rpm} RPM`, "info");
+                    }
+                }
+                lastCrankRevolutions = crankRevolutions;
+                lastCrankEventTime = crankEventTime;
+            }
+        }
+
+        /* --- GYROSCOPE & CONTROLS --- */
+        document.getElementById('btnGyro').addEventListener('click', async () => {
+            sound.init();
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') {
+                        enableGyro();
+                    }
+                } catch (e) { logBLE(`Gyro Permission error: ${e}`, "error"); }
+            } else {
+                enableGyro();
+            }
+        });
+
+        function enableGyro() {
+            window.addEventListener('deviceorientation', (e) => {
+                if (e.gamma !== null) {
+                    gyroActive = true;
+                    let normGamma = (e.gamma + 30) / 60;
+                    aimX = Math.max(0.1, Math.min(0.9, normGamma));
+                    document.getElementById('btnGyro').innerText = "📱 GYRO ACTIVE";
+                    document.getElementById('btnGyro').classList.replace('bg-sky-500', 'bg-emerald-500');
+                }
+            });
+        }
+
+        // Touch & Mouse Aiming Drag
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+                aimX = e.touches[0].clientX / width;
+                aimY = e.touches[0].clientY / height;
+            }
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!gyroActive) {
+                aimX = e.clientX / width;
+                aimY = e.clientY / height;
+            }
+        });
+
+        // Virtual Pedaling
+        function pedalPulse() {
+            targetRPM = Math.min(140, targetRPM + 25);
+            virtualPedalTimer = 20;
+        }
+
+        document.getElementById('btnVirtualPedal').addEventListener('touchstart', (e) => { e.preventDefault(); pedalPulse(); sound.init(); });
+        document.getElementById('btnVirtualPedal').addEventListener('click', () => { pedalPulse(); sound.init(); });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                pedalPulse();
+                sound.init();
+            }
+        });
+
+        // Throwing Action
+        function triggerThrow() {
+            if (gameState !== 'PLAYING' || papers <= 0) return;
+            sound.init();
+            papers--;
+            sound.playThrow();
+
+            thrownPapers.push({
+                x: width * 0.5,
+                y: height * 0.85,
+                targetX: aimX * width,
+                targetY: aimY * height,
+                progress: 0,
+                arcHeight: 110 + Math.random() * 30,
+                size: 22
+            });
+
+            updateHUD();
+        }
+
+        document.getElementById('btnThrow').addEventListener('touchstart', (e) => { e.preventDefault(); triggerThrow(); });
+        document.getElementById('btnThrow').addEventListener('click', triggerThrow);
+
+        let touchStartY = 0;
+        window.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; });
+        window.addEventListener('touchend', (e) => {
+            let touchEndY = e.changedTouches[0].clientY;
+            if (touchStartY - touchEndY > 50) triggerThrow();
+        });
+
+        /* --- PROCEDURAL ENVIRONMENT (GHIBLI / 90s ANIME STREET) --- */
+        function spawnStreetElements() {
+            if (Math.random() < 0.045) {
+                const isLeft = Math.random() > 0.5;
+                streetElements.push({
+                    type: 'HOME',
+                    side: isLeft ? -1 : 1,
+                    z: 1000,
+                    hasMailbox: Math.random() > 0.25,
+                    hasFlowers: Math.random() > 0.3,
+                    roofColor: ['#334155', '#475569', '#78350f', '#1e293b'][Math.floor(Math.random() * 4)],
+                    wallColor: ['#fef3c7', '#fffbeb', '#f1f5f9', '#ffedd5'][Math.floor(Math.random() * 4)]
+                });
+            }
+
+            // Sakura Trees
+            if (Math.random() < 0.03) {
+                const isLeft = Math.random() > 0.5;
+                streetElements.push({
+                    type: 'SAKURA_TREE',
+                    side: isLeft ? -1 : 1,
+                    z: 1000
+                });
+            }
+
+            // Shiba Inu on Wall
+            if (Math.random() < 0.01) {
+                const isLeft = Math.random() > 0.5;
+                streetElements.push({
+                    type: 'SHIBA',
+                    side: isLeft ? -1 : 1,
+                    z: 1000,
+                    xOffset: (isLeft ? -1.1 : 1.1),
+                    hit: false
+                });
+            }
+        }
+
+        /* --- MAIN UPDATE LOOP --- */
+        let lastTime = performance.now();
+
+        function updateGame(dt) {
+            currentRPM += (targetRPM - currentRPM) * 0.08;
+            if (virtualPedalTimer > 0) {
+                virtualPedalTimer--;
+            } else if (!bleDevice) {
+                targetRPM = Math.max(0, targetRPM - 0.7);
+            }
+
+            speed = (currentRPM / 60) * 110 * perks.cadenceBoost;
+            distanceTraveled += speed * dt;
+
+            if (distanceTraveled >= SECTOR_LENGTH) {
+                distanceTraveled = 0;
+                triggerPerkSelect();
+                return;
+            }
+
+            spawnStreetElements();
+
+            for (let i = streetElements.length - 1; i >= 0; i--) {
+                let el = streetElements[i];
+                el.z -= speed * dt * 1.5;
+
+                if (el.type === 'SHIBA' && el.z < 60 && el.z > 0 && !el.hit) {
+                    if (Math.abs(el.xOffset) < 1.6) {
+                        el.hit = true;
+                        hp = Math.max(0, hp - 1);
+                        sound.playBark();
+                        addFloatingText("WHOOPS! -1 HP", width * 0.5, height * 0.5, "#ef4444");
+                        updateHUD();
+                    }
+                }
+
+                if (el.z < -100) streetElements.splice(i, 1);
+            }
+
+            for (let i = thrownPapers.length - 1; i >= 0; i--) {
+                let p = thrownPapers[i];
+                p.progress += dt * 2.2;
+
+                if (p.progress >= 1.0) {
+                    checkPaperHit(p.targetX, p.targetY);
+                    thrownPapers.splice(i, 1);
+                }
+            }
+
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                let ft = floatingTexts[i];
+                ft.y -= 25 * dt;
+                ft.alpha -= dt * 1.1;
+                if (ft.alpha <= 0) floatingTexts.splice(i, 1);
+            }
+
+            // Update Sakura Petals
+            for (let petal of sakuraPetals) {
+                petal.y += petal.speedY;
+                petal.x += Math.sin(petal.y * 0.02) * petal.speedX;
+                if (petal.y > height) { petal.y = -10; petal.x = Math.random() * width; }
+            }
+
+            document.getElementById('rpmText').innerText = Math.round(currentRPM);
+            document.getElementById('rpmBar').style.width = `${Math.min(100, (currentRPM / 120) * 100)}%`;
+        }
+
+        function checkPaperHit(tx, ty) {
+            let hitFound = false;
+
+            for (let el of streetElements) {
+                if (el.z > 50 && el.z < 350 && el.type === 'HOME') {
+                    const isLeft = el.side === -1;
+                    const targetX = isLeft ? width * 0.26 : width * 0.74;
+                    const targetY = height * 0.56;
+
+                    const dist = Math.hypot(tx - targetX, ty - targetY);
+                    const hitRadius = 75 * perks.magneticHitbox;
+
+                    if (dist < hitRadius) {
+                        hitFound = true;
+                        const isPerfect = dist < (hitRadius * 0.45);
+                        const points = (isPerfect ? 500 : 250) * (perks.goldenPapers ? 2 : 1);
+                        score += points;
+                        sound.playHit(isPerfect);
+
+                        addFloatingText(
+                            isPerfect ? "🌸 PERFECT MAILBOX! +500" : "🏡 GREAT LANDING! +250", 
+                            tx, ty, isPerfect ? "#10b981" : "#f59e0b"
+                        );
+                        updateHUD();
+                        break;
+                    }
+                }
+            }
+
+            if (!hitFound) {
+                addFloatingText("MISSED!", tx, ty, "#94a3b8");
+            }
+        }
+
+        function addFloatingText(text, x, y, color) {
+            floatingTexts.push({ text, x, y, color, alpha: 1.0 });
+        }
+
+        function updateHUD() {
+            document.getElementById('scoreText').innerText = score.toString().padStart(5, '0');
+            document.getElementById('paperText').innerText = papers;
+            document.getElementById('maxPaperText').innerText = maxPapers;
+            document.getElementById('hpHearts').innerText = "❤️".repeat(hp) + "🖤".repeat(3 - hp);
+        }
+
+        /* --- CANVAS 2D PSEUDO-3D RENDERER (FEEL-GOOD GHIBLI STYLE) --- */
+        function render() {
+            ctx.clearRect(0, 0, width, height);
+
+            const horizonY = height * 0.46;
+
+            // 1. Warm Sunny Afternoon Sky & Sun
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, horizonY);
+            skyGradient.addColorStop(0, '#7dd3fc'); // Sky Blue
+            skyGradient.addColorStop(0.7, '#bae6fd');
+            skyGradient.addColorStop(1, '#fef08a'); // Warm Golden Horizon
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, width, horizonY);
+
+            // Gentle Soft Golden Sun
+            ctx.fillStyle = 'rgba(254, 240, 138, 0.6)';
+            ctx.beginPath();
+            ctx.arc(width * 0.7, horizonY - 40, 70, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Distant Mountains / Green Hills
+            ctx.fillStyle = '#86efac';
+            ctx.beginPath();
+            ctx.moveTo(0, horizonY);
+            ctx.quadraticCurveTo(width * 0.25, horizonY - 35, width * 0.5, horizonY);
+            ctx.quadraticCurveTo(width * 0.75, horizonY - 45, width, horizonY);
+            ctx.lineTo(width, horizonY);
+            ctx.lineTo(0, horizonY);
+            ctx.fill();
+
+            // 2. Road & Sidewalks
+            const roadGradient = ctx.createLinearGradient(0, horizonY, 0, height);
+            roadGradient.addColorStop(0, '#cbd5e1'); // Soft Warm Asphalt
+            roadGradient.addColorStop(1, '#94a3b8');
+            ctx.fillStyle = roadGradient;
+            ctx.fillRect(0, horizonY, width, height - horizonY);
+
+            // Lush Green Sidewalk Grass Margins
+            ctx.fillStyle = '#4ade80';
+            ctx.beginPath();
+            ctx.moveTo(width * 0.5, horizonY); ctx.lineTo(-width * 0.3, height);
+            ctx.lineTo(width * 0.1, height); ctx.lineTo(width * 0.5, horizonY);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(width * 0.5, horizonY); ctx.lineTo(width * 1.3, height);
+            ctx.lineTo(width * 0.9, height); ctx.lineTo(width * 0.5, horizonY);
+            ctx.fill();
+
+            // Road Markings
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(width * 0.5, horizonY); ctx.lineTo(width * 0.15, height);
+            ctx.moveTo(width * 0.5, horizonY); ctx.lineTo(width * 0.85, height);
+            ctx.stroke();
+
+            // Scrolling Lane Lines
+            const gridOffset = (distanceTraveled % 80) / 80;
+            ctx.strokeStyle = '#fef08a';
+            ctx.lineWidth = 4;
+            for (let i = 0; i < 12; i++) {
+                let p = (i + gridOffset) / 12;
+                let py = horizonY + Math.pow(p, 2) * (height - horizonY);
+                let px = width * 0.5;
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(px, py + 12 * p);
+                ctx.stroke();
+            }
+
+            // 3. Render Street Elements (Houses, Sakura Trees, Mailboxes, Potted Plants)
+            streetElements.sort((a, b) => b.z - a.z);
+
+            for (let el of streetElements) {
+                const scale = 280 / (el.z + 10);
+                const screenX = width * 0.5 + (el.side * width * 0.38) * (scale);
+                const screenY = horizonY + (height * 0.08) * (scale);
+
+                if (el.type === 'HOME') {
+                    const houseW = 190 * scale;
+                    const houseH = 210 * scale;
+
+                    // House Main Wall
+                    ctx.fillStyle = el.wallColor;
+                    ctx.fillRect(screenX - houseW * 0.5, screenY - houseH, houseW, houseH);
+                    ctx.strokeStyle = '#b45309';
+                    ctx.lineWidth = Math.max(1, 2 * scale);
+                    ctx.strokeRect(screenX - houseW * 0.5, screenY - houseH, houseW, houseH);
+
+                    // Tile Roof
+                    ctx.fillStyle = el.roofColor;
+                    ctx.beginPath();
+                    ctx.moveTo(screenX - houseW * 0.6, screenY - houseH);
+                    ctx.lineTo(screenX, screenY - houseH - 45 * scale);
+                    ctx.lineTo(screenX + houseW * 0.6, screenY - houseH);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Wooden Door
+                    ctx.fillStyle = '#b45309';
+                    ctx.fillRect(screenX - 18 * scale, screenY - 65 * scale, 36 * scale, 65 * scale);
+
+                    // Traditional Red Japanese Mailbox Target
+                    if (el.hasMailbox) {
+                        const mbX = screenX + (el.side * -1) * 38 * scale;
+                        const mbY = screenY - 45 * scale;
+
+                        // Red Post Box
+                        ctx.fillStyle = '#dc2626';
+                        ctx.fillRect(mbX - 12 * scale, mbY - 18 * scale, 24 * scale, 30 * scale);
+
+                        // Target Glow Ring
+                        ctx.strokeStyle = '#10b981';
+                        ctx.lineWidth = 3 * scale;
+                        ctx.beginPath();
+                        ctx.arc(mbX, mbY, (22 * scale) * perks.magneticHitbox, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+
+                    // Potted Plants / Hydrangeas at Gate
+                    if (el.hasFlowers) {
+                        ctx.fillStyle = '#15803d';
+                        ctx.beginPath();
+                        ctx.arc(screenX - houseW * 0.35, screenY - 10 * scale, 14 * scale, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#f472b6'; // Blossom Pink
+                        ctx.beginPath();
+                        ctx.arc(screenX - houseW * 0.35, screenY - 14 * scale, 6 * scale, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                } else if (el.type === 'SAKURA_TREE') {
+                    // Tree Trunk
+                    ctx.fillStyle = '#78350f';
+                    ctx.fillRect(screenX - 12 * scale, screenY - 120 * scale, 24 * scale, 120 * scale);
+                    // Fluffy Sakura Canopy
+                    ctx.fillStyle = '#f472b6';
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY - 140 * scale, 60 * scale, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#fbcfe8';
+                    ctx.beginPath();
+                    ctx.arc(screenX - 15 * scale, screenY - 150 * scale, 35 * scale, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (el.type === 'SHIBA') {
+                    // Cute Resting Shiba Inu
+                    const dogSize = 28 * scale;
+                    ctx.fillStyle = '#f59e0b'; // Shiba Orange
+                    ctx.fillRect(screenX - dogSize * 0.5, screenY - dogSize, dogSize, dogSize * 0.8);
+                    ctx.fillStyle = '#27272a';
+                    ctx.font = `bold ${Math.max(10, 14 * scale)}px Fredoka`;
+                    ctx.fillText("🐕 Bark!", screenX - dogSize, screenY - dogSize * 1.1);
+                }
+            }
+
+            // 4. Sakura Petals Floating Effect
+            ctx.fillStyle = '#fbcfe8';
+            for (let petal of sakuraPetals) {
+                ctx.save();
+                ctx.translate(petal.x, petal.y);
+                ctx.rotate(petal.rotation);
+                ctx.fillRect(-petal.size / 2, -petal.size / 2, petal.size, petal.size * 0.6);
+                ctx.restore();
+            }
+
+            // 5. Player Cute 90s Bike & Basket (Foreground)
+            const bikeX = width * 0.5;
+            const bikeY = height * 0.88;
+
+            ctx.save();
+            ctx.translate(bikeX, bikeY);
+
+            // Vintage Bike Handlebars (Silver/White)
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 12;
+            ctx.beginPath();
+            ctx.moveTo(-110, 20); ctx.lineTo(110, 20);
+            ctx.stroke();
+
+            // Grips (Warm Tan)
+            ctx.fillStyle = '#d97706';
+            ctx.fillRect(-130, 10, 25, 20);
+            ctx.fillRect(105, 10, 25, 20);
+
+            // Front Woven Basket
+            ctx.fillStyle = '#fef3c7';
+            ctx.fillRect(-45, -30, 90, 50);
+            ctx.strokeStyle = '#b45309';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(-45, -30, 90, 50);
+
+            // Rolled Papers in Basket
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#0284c7'; // Sky blue string around papers
+            for (let i = 0; i < Math.min(6, papers); i++) {
+                ctx.fillRect(-35 + i * 10, -25, 18, 35);
+                ctx.strokeRect(-35 + i * 10, -25, 18, 35);
+            }
+            ctx.restore();
+
+            // 6. Target Reticle
+            const reticleX = aimX * width;
+            const reticleY = aimY * height;
+
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(reticleX, reticleY, 20, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(reticleX, reticleY, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Arc Trajectory Preview
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.5)';
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(bikeX, bikeY);
+            ctx.quadraticCurveTo(bikeX, reticleY - 40, reticleX, reticleY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 7. Render Thrown Papers
+            for (let p of thrownPapers) {
+                const currentX = bikeX + (p.targetX - bikeX) * p.progress;
+                const linearY = bikeY + (p.targetY - bikeY) * p.progress;
+                const currentY = linearY - Math.sin(p.progress * Math.PI) * p.arcHeight;
+                const currentSize = p.size * (1.0 - p.progress * 0.35);
+
+                ctx.save();
+                ctx.translate(currentX, currentY);
+                ctx.rotate(p.progress * 10);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(-currentSize / 2, -currentSize / 2, currentSize, currentSize * 0.7);
+                ctx.strokeStyle = '#3b82f6';
+                ctx.strokeRect(-currentSize / 2, -currentSize / 2, currentSize, currentSize * 0.7);
+                ctx.restore();
+            }
+
+            // 8. Render Floating Feedback Texts
+            for (let ft of floatingTexts) {
+                ctx.fillStyle = ft.color;
+                ctx.font = "bold 18px Fredoka";
+                ctx.globalAlpha = ft.alpha;
+                ctx.fillText(ft.text, ft.x - 50, ft.y);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function gameLoop(timestamp) {
+            const dt = Math.min(0.1, (timestamp - lastTime) / 1000);
+            lastTime = timestamp;
+
+            if (gameState === 'PLAYING') {
+                updateGame(dt);
+            }
+            render();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        /* --- ROGUELIKE PERK SYSTEM --- */
+        const perkList = [
+            {
+                id: 'magnetic',
+                title: '🧲 WIDE DELIVERY',
+                desc: '+35% Target Hitbox Area for easier deliveries.',
+                apply: () => { perks.magneticHitbox += 0.35; }
+            },
+            {
+                id: 'golden',
+                title: '✨ GOLDEN JOURNALS',
+                desc: 'Earn 2x Points for all successful mailbox deliveries.',
+                apply: () => { perks.goldenPapers = true; }
+            },
+            {
+                id: 'turbo',
+                title: '⚡ SUNSHINE SPRINT',
+                desc: '+25% Top Biking Speed boost per RPM.',
+                apply: () => { perks.cadenceBoost += 0.25; }
+            },
+            {
+                id: 'refill',
+                title: '🗞️ BAG REFILL',
+                desc: 'Restores +20 Papers and +1 Heart HP.',
+                apply: () => { papers = Math.min(50, papers + 20); hp = Math.min(3, hp + 1); updateHUD(); }
+            }
+        ];
+
+        function triggerPerkSelect() {
+            gameState = 'PERK_SELECT';
+            const container = document.getElementById('perkContainer');
+            container.innerHTML = '';
+
+            const shuffled = [...perkList].sort(() => 0.5 - Math.random()).slice(0, 3);
+
+            shuffled.forEach(perk => {
+                const card = document.createElement('div');
+                card.className = "bg-white border-2 border-emerald-400 hover:border-amber-500 rounded-2xl p-5 text-left cursor-pointer transition-all transform hover:-translate-y-1 shadow-2xl flex flex-col justify-between";
+                card.innerHTML = `
+                    <div>
+                        <h3 class="text-base font-bold text-amber-800 mb-2">${perk.title}</h3>
+                        <p class="text-xs text-gray-600 leading-relaxed">${perk.desc}</p>
+                    </div>
+                    <button class="mt-4 w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-md">SELECT PERK</button>
+                `;
+                card.onclick = () => {
+                    perk.apply();
+                    document.getElementById('perkModal').classList.add('hidden');
+                    gameState = 'PLAYING';
+                };
+                container.appendChild(card);
+            });
+
+            document.getElementById('perkModal').classList.remove('hidden');
+        }
+
+        /* --- START & INITIALIZATION --- */
+        document.getElementById('btnStartGame').addEventListener('click', () => {
+            sound.init();
+            document.getElementById('titleScreen').classList.add('hidden');
+            gameState = 'PLAYING';
+            updateHUD();
+        });
+
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
